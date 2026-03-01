@@ -18,6 +18,11 @@ from commune.types import (
     AttachmentUrl,
     DomainVerificationResult,
     DeleteResult,
+    SearchResult,
+    SmsSendResult,
+    DeliveryMetrics,
+    DeliverySuppression,
+    DeliveryEvent,
     SendMessageResult,
     SendMessagePayload,
     CreateDomainPayload,
@@ -55,6 +60,11 @@ __all__ = [
     "AttachmentUrl",
     "DomainVerificationResult",
     "DeleteResult",
+    "SearchResult",
+    "SmsSendResult",
+    "DeliveryMetrics",
+    "DeliverySuppression",
+    "DeliveryEvent",
     "SendMessageResult",
     "SendMessagePayload",
     "CreateDomainPayload",
@@ -74,4 +84,4 @@ __all__ = [
     "WebhookVerificationError",
 ]
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"

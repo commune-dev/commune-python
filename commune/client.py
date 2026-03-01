@@ -7,7 +7,7 @@ Use this when you want your AI agent to:
 - Have a real email address (client.inboxes.create)
 - Send email from that address (client.messages.send)
 - Receive and reply to emails in threaded conversations (webhook + client.messages.send with thread_id)
-- Search email history with natural language (client.search.threads)
+- Search email history with natural language (client.search.threads(query))
 - Extract structured data from inbound emails automatically (client.inboxes.update with extraction_schema)
 - Handle file attachments (client.attachments.upload, client.attachments.get)
 
@@ -39,14 +39,19 @@ from commune._http import HttpClient
 from commune.types import (
     Attachment,
     DeleteResult,
+    DeliveryEvent,
+    DeliveryMetrics,
+    DeliverySuppression,
     DomainDnsRecord,
     DomainVerificationResult,
     CreateDomainPayload,
     CreateInboxPayload,
     UpdateInboxPayload,
     SetInboxWebhookPayload,
+    SearchResult,
     SendMessagePayload,
     SendMessageResult,
+    SmsSendResult,
     UploadAttachmentPayload,
     AttachmentUpload,
     AttachmentUrl,
@@ -1113,6 +1118,272 @@ class _Attachments:
         return AttachmentUrl.model_validate(data)
 
 
+class _Search:
+    """Full-text search across email threads.
+
+    Use client.search.threads() to find conversations by subject or content.
+    Returns ranked thread summaries — call threads.messages() on each result
+    to load full conversation history.
+
+    Example::
+
+        results = client.search.threads(
+            query="invoice",
+            inbox_id="i_abc123",
+            limit=10,
+        )
+        for r in results:
+            print(r.thread_id, r.subject, r.snippet)
+    """
+
+    def __init__(self, http: HttpClient):
+        self._http = http
+
+    def threads(
+        self,
+        query: str,
+        *,
+        inbox_id: str | None = None,
+        domain_id: str | None = None,
+        limit: int = 20,
+    ) -> list[SearchResult]:
+        """Search across email threads by subject or content.
+
+        Returns ranked thread summaries. Provide at least one of inbox_id or
+        domain_id to scope the search. Use threads.messages() on each result
+        to load the full conversation before generating a reply.
+
+        Args:
+            query: Search query string. Searches subject lines and message body
+                   content. Supports natural language (e.g. "invoice from January",
+                   "meeting rescheduled", "password reset request").
+            inbox_id: Scope search to a single inbox (recommended). Returns
+                      only threads in this inbox.
+            domain_id: Scope search to a domain. Returns threads from all
+                       inboxes under the domain.
+            limit: Max results to return (1–100, default 20).
+
+        Returns:
+            List of SearchResult objects ordered by relevance. Each has
+            .thread_id, .subject, .snippet, and .message_count.
+
+        Example — find threads matching a topic:
+            results = client.search.threads(
+                query="refund request",
+                inbox_id=support_inbox_id,
+            )
+            for r in results:
+                messages = client.threads.messages(r.thread_id)
+                context = format_for_llm(messages)
+                reply = agent.generate_reply(context)
+        """
+        params: dict[str, Any] = {"q": query, "limit": limit}
+        if inbox_id:
+            params["inbox_id"] = inbox_id
+        if domain_id:
+            params["domain_id"] = domain_id
+        data = self._http.get("/v1/search/threads", params=params)
+        if isinstance(data, list):
+            return [SearchResult.model_validate(r) for r in data]
+        return [SearchResult.model_validate(r) for r in (data or [])]
+
+
+class _Sms:
+    """SMS sending — give your agent a text messaging channel alongside email.
+
+    Use client.sms.send() to send an SMS. Requires a provisioned phone number
+    in your Commune account. Credits are charged per segment (160 characters
+    for standard SMS; 153 for multi-part messages).
+
+    Example::
+
+        result = client.sms.send(
+            to="+15551234567",
+            body="Your verification code is 847291.",
+        )
+        print(result.status)  # → "queued"
+    """
+
+    def __init__(self, http: HttpClient):
+        self._http = http
+
+    def send(
+        self,
+        *,
+        to: str,
+        body: str,
+        phone_number_id: str | None = None,
+    ) -> SmsSendResult:
+        """Send an SMS message.
+
+        Args:
+            to: Recipient phone number in E.164 format (e.g. "+15551234567").
+                Must include country code. US numbers: "+1XXXXXXXXXX".
+            body: SMS message text. Keep under 160 characters for a single
+                  segment. Longer messages are split automatically but cost
+                  more credits.
+            phone_number_id: Send from a specific provisioned number. If your
+                             account has only one number, this is optional.
+
+        Returns:
+            SmsSendResult with:
+              .message_id      — internal Commune ID
+              .message_sid     — carrier-level SID for delivery tracking
+              .status          — "queued", "sent", "delivered", or "failed"
+              .credits_charged — credits deducted for this send
+
+        Example — SMS escalation from email agent:
+            # In email webhook handler — if marked urgent, also send SMS
+            if "urgent" in payload["subject"].lower():
+                client.sms.send(
+                    to=on_call_phone,
+                    body=f"Urgent email from {payload['sender']}: {payload['subject']}",
+                )
+        """
+        payload: dict[str, Any] = {"to": to, "body": body}
+        if phone_number_id:
+            payload["phone_number_id"] = phone_number_id
+        data = self._http.post("/v1/sms/send", json=payload)
+        return SmsSendResult.model_validate(data)
+
+
+class _Delivery:
+    """Deliverability monitoring — track email delivery health and manage suppressions.
+
+    Use client.delivery.metrics() to get delivery statistics (sent, delivered,
+    bounced, complained) for an inbox or domain. Use .suppressions() to audit
+    addresses that have been automatically blocked.
+
+    Example::
+
+        metrics = client.delivery.metrics(inbox_id="i_abc123", period="7d")
+        print(f"Delivery rate: {metrics.delivery_rate:.1f}%")
+        print(f"Bounce rate: {metrics.bounce_rate:.1f}%")
+    """
+
+    def __init__(self, http: HttpClient):
+        self._http = http
+
+    def metrics(
+        self,
+        *,
+        inbox_id: str | None = None,
+        domain_id: str | None = None,
+        period: str = "7d",
+    ) -> DeliveryMetrics:
+        """Get email deliverability metrics for an inbox or domain.
+
+        Returns aggregate statistics for the requested time period. Monitor
+        these to catch deliverability problems early — a rising bounce rate
+        or complaint rate signals sender reputation damage.
+
+        Args:
+            inbox_id: Filter metrics to a specific inbox (recommended).
+            domain_id: Filter metrics to a domain (all inboxes combined).
+            period: Time window — "24h", "7d" (default), or "30d".
+
+        Returns:
+            DeliveryMetrics with:
+              .sent, .delivered, .bounced, .complained, .failed — raw counts
+              .delivery_rate, .bounce_rate, .complaint_rate — percentages (0–100)
+              .period — the period you requested
+
+        Example — health check before a bulk send:
+            metrics = client.delivery.metrics(inbox_id=outreach_inbox_id, period="7d")
+            if metrics.bounce_rate and metrics.bounce_rate > 5.0:
+                raise RuntimeError(
+                    f"Bounce rate too high ({metrics.bounce_rate:.1f}%) — "
+                    f"clean your list before sending."
+                )
+        """
+        params: dict[str, Any] = {"period": period}
+        if inbox_id:
+            params["inbox_id"] = inbox_id
+        if domain_id:
+            params["domain_id"] = domain_id
+        data = self._http.get("/v1/delivery/metrics", params=params)
+        return DeliveryMetrics.model_validate(data)
+
+    def suppressions(
+        self,
+        *,
+        inbox_id: str | None = None,
+        domain_id: str | None = None,
+        limit: int = 50,
+    ) -> list[DeliverySuppression]:
+        """List suppressed email addresses (bounces, complaints, unsubscribes).
+
+        Suppressed addresses are automatically skipped when you call messages.send().
+        This endpoint lets you audit the list — useful for debugging why a specific
+        recipient isn't receiving emails.
+
+        Args:
+            inbox_id: Filter suppressions to a specific inbox.
+            domain_id: Filter suppressions to a domain.
+            limit: Max results (default 50).
+
+        Returns:
+            List of DeliverySuppression objects, each with:
+              .email          — suppressed address
+              .reason         — "hard_bounce", "complaint", or "unsubscribe"
+              .suppressed_at  — ISO 8601 timestamp
+        """
+        params: dict[str, Any] = {"limit": limit}
+        if inbox_id:
+            params["inbox_id"] = inbox_id
+        if domain_id:
+            params["domain_id"] = domain_id
+        data = self._http.get("/v1/delivery/suppressions", params=params)
+        if isinstance(data, list):
+            return [DeliverySuppression.model_validate(s) for s in data]
+        return [DeliverySuppression.model_validate(s) for s in (data or [])]
+
+    def events(
+        self,
+        *,
+        message_id: str | None = None,
+        inbox_id: str | None = None,
+        domain_id: str | None = None,
+        event_type: str | None = None,
+        limit: int = 50,
+    ) -> list[DeliveryEvent]:
+        """Get the delivery event log for messages.
+
+        Track the full lifecycle of individual emails — from sent to delivered,
+        or through the failure path (bounced, complained, failed). Filter by
+        message_id to trace a specific email end-to-end.
+
+        Args:
+            message_id: Filter events for a specific message send.
+            inbox_id: Filter events for all messages from an inbox.
+            domain_id: Filter events for all messages from a domain.
+            event_type: Filter by event type:
+                        "sent" — accepted by Commune and handed to SMTP
+                        "delivered" — confirmed received by destination server
+                        "bounced" — rejected by destination server
+                        "complained" — marked as spam by recipient
+                        "failed" — failed before reaching SMTP
+            limit: Max results (default 50).
+
+        Returns:
+            List of DeliveryEvent objects, each with .event_type, .recipient,
+            .timestamp, and .detail (bounce reason or error message).
+        """
+        params: dict[str, Any] = {"limit": limit}
+        if message_id:
+            params["message_id"] = message_id
+        if inbox_id:
+            params["inbox_id"] = inbox_id
+        if domain_id:
+            params["domain_id"] = domain_id
+        if event_type:
+            params["event_type"] = event_type
+        data = self._http.get("/v1/delivery/events", params=params)
+        if isinstance(data, list):
+            return [DeliveryEvent.model_validate(e) for e in data]
+        return [DeliveryEvent.model_validate(e) for e in (data or [])]
+
+
 class CommuneClient:
     """Commune SDK client — email and messaging infrastructure for AI agents.
 
@@ -1124,6 +1395,9 @@ class CommuneClient:
     - Send email from that address:        client.messages.send()
     - Reply within a conversation:         client.messages.send(thread_id=...)
     - Browse conversation history:         client.threads.list(), client.threads.messages()
+    - Search email content:                client.search.threads(query)
+    - Send an SMS:                         client.sms.send(to, body)
+    - Monitor delivery health:             client.delivery.metrics(inbox_id)
     - Handle file attachments:             client.attachments.upload(), .get(), .url()
     - Manage sending domains:              client.domains.list(), .create(), .verify()
 
@@ -1220,6 +1494,9 @@ class CommuneClient:
         self.threads = _Threads(self._http)
         self.messages = _Messages(self._http)
         self.attachments = _Attachments(self._http)
+        self.search = _Search(self._http)
+        self.sms = _Sms(self._http)
+        self.delivery = _Delivery(self._http)
 
     def close(self) -> None:
         """Close the underlying HTTP connection pool.

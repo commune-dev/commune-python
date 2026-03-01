@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "commune-mail"
-version = "0.2.0"
+version = "0.3.0"
 description = "Email infrastructure for agents — set up an inbox and send your first email in 30 seconds. Programmatic inboxes (~1 line), consistent threads, custom domains, attachments, and structured data."
 readme = "README.md"
 license = "MIT"

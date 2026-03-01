@@ -37,14 +37,19 @@ from commune._async_http import AsyncHttpClient
 from commune.types import (
     Attachment,
     DeleteResult,
+    DeliveryEvent,
+    DeliveryMetrics,
+    DeliverySuppression,
     DomainDnsRecord,
     DomainVerificationResult,
     CreateDomainPayload,
     CreateInboxPayload,
     UpdateInboxPayload,
     SetInboxWebhookPayload,
+    SearchResult,
     SendMessagePayload,
     SendMessageResult,
+    SmsSendResult,
     UploadAttachmentPayload,
     AttachmentUpload,
     AttachmentUrl,
@@ -766,6 +771,168 @@ class _AsyncAttachments:
         return AttachmentUrl.model_validate(data)
 
 
+class _AsyncSearch:
+    """Async full-text search across email threads."""
+
+    def __init__(self, http: AsyncHttpClient):
+        self._http = http
+
+    async def threads(
+        self,
+        query: str,
+        *,
+        inbox_id: str | None = None,
+        domain_id: str | None = None,
+        limit: int = 20,
+    ) -> list[SearchResult]:
+        """Search across email threads by subject or content.
+
+        Args:
+            query: Search query string.
+            inbox_id: Scope search to a single inbox (recommended).
+            domain_id: Scope search to a domain.
+            limit: Max results (1–100, default 20).
+
+        Returns:
+            List of SearchResult objects ordered by relevance.
+        """
+        params: dict[str, Any] = {"q": query, "limit": limit}
+        if inbox_id:
+            params["inbox_id"] = inbox_id
+        if domain_id:
+            params["domain_id"] = domain_id
+        data = await self._http.get("/v1/search/threads", params=params)
+        if isinstance(data, list):
+            return [SearchResult.model_validate(r) for r in data]
+        return [SearchResult.model_validate(r) for r in (data or [])]
+
+
+class _AsyncSms:
+    """Async SMS sending."""
+
+    def __init__(self, http: AsyncHttpClient):
+        self._http = http
+
+    async def send(
+        self,
+        *,
+        to: str,
+        body: str,
+        phone_number_id: str | None = None,
+    ) -> SmsSendResult:
+        """Send an SMS message.
+
+        Args:
+            to: Recipient phone number in E.164 format (e.g. "+15551234567").
+            body: SMS message text.
+            phone_number_id: Send from a specific provisioned number (optional).
+
+        Returns:
+            SmsSendResult with .message_id, .status, .credits_charged.
+        """
+        payload: dict[str, Any] = {"to": to, "body": body}
+        if phone_number_id:
+            payload["phone_number_id"] = phone_number_id
+        data = await self._http.post("/v1/sms/send", json=payload)
+        return SmsSendResult.model_validate(data)
+
+
+class _AsyncDelivery:
+    """Async deliverability monitoring."""
+
+    def __init__(self, http: AsyncHttpClient):
+        self._http = http
+
+    async def metrics(
+        self,
+        *,
+        inbox_id: str | None = None,
+        domain_id: str | None = None,
+        period: str = "7d",
+    ) -> DeliveryMetrics:
+        """Get email deliverability metrics.
+
+        Args:
+            inbox_id: Filter metrics to a specific inbox.
+            domain_id: Filter metrics to a domain.
+            period: Time window — "24h", "7d" (default), or "30d".
+
+        Returns:
+            DeliveryMetrics with sent, delivered, bounced, complained, failed counts
+            and delivery_rate, bounce_rate, complaint_rate percentages.
+        """
+        params: dict[str, Any] = {"period": period}
+        if inbox_id:
+            params["inbox_id"] = inbox_id
+        if domain_id:
+            params["domain_id"] = domain_id
+        data = await self._http.get("/v1/delivery/metrics", params=params)
+        return DeliveryMetrics.model_validate(data)
+
+    async def suppressions(
+        self,
+        *,
+        inbox_id: str | None = None,
+        domain_id: str | None = None,
+        limit: int = 50,
+    ) -> list[DeliverySuppression]:
+        """List suppressed email addresses.
+
+        Args:
+            inbox_id: Filter suppressions to a specific inbox.
+            domain_id: Filter suppressions to a domain.
+            limit: Max results (default 50).
+
+        Returns:
+            List of DeliverySuppression objects with .email, .reason, .suppressed_at.
+        """
+        params: dict[str, Any] = {"limit": limit}
+        if inbox_id:
+            params["inbox_id"] = inbox_id
+        if domain_id:
+            params["domain_id"] = domain_id
+        data = await self._http.get("/v1/delivery/suppressions", params=params)
+        if isinstance(data, list):
+            return [DeliverySuppression.model_validate(s) for s in data]
+        return [DeliverySuppression.model_validate(s) for s in (data or [])]
+
+    async def events(
+        self,
+        *,
+        message_id: str | None = None,
+        inbox_id: str | None = None,
+        domain_id: str | None = None,
+        event_type: str | None = None,
+        limit: int = 50,
+    ) -> list[DeliveryEvent]:
+        """Get the delivery event log for messages.
+
+        Args:
+            message_id: Filter events for a specific message.
+            inbox_id: Filter events for all messages from an inbox.
+            domain_id: Filter events for all messages from a domain.
+            event_type: Filter by type: "sent", "delivered", "bounced",
+                        "complained", or "failed".
+            limit: Max results (default 50).
+
+        Returns:
+            List of DeliveryEvent objects with .event_type, .recipient, .timestamp.
+        """
+        params: dict[str, Any] = {"limit": limit}
+        if message_id:
+            params["message_id"] = message_id
+        if inbox_id:
+            params["inbox_id"] = inbox_id
+        if domain_id:
+            params["domain_id"] = domain_id
+        if event_type:
+            params["event_type"] = event_type
+        data = await self._http.get("/v1/delivery/events", params=params)
+        if isinstance(data, list):
+            return [DeliveryEvent.model_validate(e) for e in data]
+        return [DeliveryEvent.model_validate(e) for e in (data or [])]
+
+
 class AsyncCommuneClient:
     """Async Commune SDK client — email infrastructure for AI agents using asyncio.
 
@@ -857,6 +1024,9 @@ class AsyncCommuneClient:
         self.threads = _AsyncThreads(self._http)
         self.messages = _AsyncMessages(self._http)
         self.attachments = _AsyncAttachments(self._http)
+        self.search = _AsyncSearch(self._http)
+        self.sms = _AsyncSms(self._http)
+        self.delivery = _AsyncDelivery(self._http)
 
     async def close(self) -> None:
         """Close the underlying async HTTP connection pool.

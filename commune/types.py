@@ -634,3 +634,118 @@ class DeleteResult(ContractModel):
     """Typed common delete response."""
 
     ok: bool = False
+
+
+# ── Search ────────────────────────────────────────────────────────────────────
+
+
+class SearchResult(ContractModel):
+    """A thread matching a search query (from client.search.threads()).
+
+    Attributes:
+        thread_id: Thread identifier — pass to threads.messages() to load the
+                   full conversation.
+        subject: Email subject of the thread.
+        snippet: Short preview of the most recent message body.
+        message_count: Number of messages in the thread.
+        last_activity: ISO 8601 timestamp of the most recent message.
+    """
+
+    thread_id: Optional[str] = None
+    subject: Optional[str] = None
+    snippet: Optional[str] = None
+    message_count: Optional[int] = None
+    last_activity: Optional[str] = None
+
+
+# ── SMS ───────────────────────────────────────────────────────────────────────
+
+
+class SmsSendResult(ContractModel):
+    """Confirmation returned after client.sms.send() succeeds.
+
+    Attributes:
+        message_id: Internal Commune message ID.
+        message_sid: Carrier-level message SID for delivery tracking.
+        status: Delivery status — "queued", "sent", "delivered", or "failed".
+        credits_charged: Credits deducted for this send (1 credit per segment
+                         for US numbers; international rates vary).
+    """
+
+    message_id: Optional[str] = None
+    message_sid: Optional[str] = None
+    status: Optional[str] = None
+    credits_charged: Optional[int] = None
+
+
+# ── Delivery ──────────────────────────────────────────────────────────────────
+
+
+class DeliveryMetrics(ContractModel):
+    """Deliverability statistics for an inbox or domain (from delivery.metrics()).
+
+    Attributes:
+        sent: Total emails sent in the period.
+        delivered: Emails confirmed delivered by the receiving server.
+        bounced: Emails that bounced (hard or soft).
+        complained: Emails that triggered spam complaints.
+        failed: Emails that failed to send (server errors, invalid addresses).
+        delivery_rate: Delivered / sent as a percentage (0–100).
+        bounce_rate: Bounced / sent as a percentage (0–100).
+        complaint_rate: Complained / sent as a percentage (0–100).
+        period: The time window requested (e.g. "7d", "30d").
+    """
+
+    sent: Optional[int] = None
+    delivered: Optional[int] = None
+    bounced: Optional[int] = None
+    complained: Optional[int] = None
+    failed: Optional[int] = None
+    delivery_rate: Optional[float] = None
+    bounce_rate: Optional[float] = None
+    complaint_rate: Optional[float] = None
+    period: Optional[str] = None
+
+
+class DeliverySuppression(ContractModel):
+    """A suppressed address — will not receive emails (from delivery.suppressions()).
+
+    Addresses are added to the suppression list automatically when an email
+    hard-bounces or triggers a spam complaint. Suppressed addresses are
+    silently skipped when you call messages.send().
+
+    Attributes:
+        email: The suppressed email address.
+        reason: Why the address was suppressed:
+                "hard_bounce" — address does not exist or server rejected permanently.
+                "complaint"   — recipient marked the email as spam.
+                "unsubscribe" — recipient clicked unsubscribe.
+        suppressed_at: ISO 8601 timestamp when the suppression was created.
+    """
+
+    email: Optional[str] = None
+    reason: Optional[str] = None
+    suppressed_at: Optional[str] = None
+
+
+class DeliveryEvent(ContractModel):
+    """A single delivery lifecycle event (from delivery.events()).
+
+    Each email send generates a series of events as it moves through the
+    delivery pipeline: sent → delivered (or bounced/complained/failed).
+
+    Attributes:
+        event_id: Unique ID for this event.
+        message_id: The message this event belongs to.
+        event_type: One of: "sent", "delivered", "bounced", "complained", "failed".
+        recipient: The email address this event applies to.
+        timestamp: ISO 8601 timestamp of the event.
+        detail: Additional context (bounce reason, complaint type, error message).
+    """
+
+    event_id: Optional[str] = None
+    message_id: Optional[str] = None
+    event_type: Optional[str] = None
+    recipient: Optional[str] = None
+    timestamp: Optional[str] = None
+    detail: Optional[str] = None
