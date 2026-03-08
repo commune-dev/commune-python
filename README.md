@@ -1,7 +1,7 @@
 [![PyPI](https://img.shields.io/pypi/v/commune-mail?color=blue&label=PyPI)](https://pypi.org/project/commune-mail/)
 [![PyPI Downloads](https://img.shields.io/pypi/dm/commune-mail?label=downloads%2Fmo&color=blue)](https://pypi.org/project/commune-mail/)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://pypi.org/project/commune-mail/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-commune.email-blue)](https://commune.email/docs?ref=commune-python)
 [![MCP Server](https://img.shields.io/badge/MCP-commune--mcp-purple)](https://github.com/shanjai-raj/commune-mcp)
 [![Cookbook](https://img.shields.io/badge/examples-commune--cookbook-green)](https://github.com/shanjai-raj/commune-cookbook)
@@ -961,19 +961,13 @@ See the [commune-cookbook](https://github.com/shanjai-raj/commune-cookbook) for 
 
 ## Ecosystem
 
-This SDK is one part of a three-repo ecosystem:
-
-| Repo | What it is | When to use it |
-|------|-----------|----------------|
-| **commune-mail** (this repo) | Python SDK | You're building a Python agent |
-| **[commune-ai](https://github.com/shanjai-raj/commune-ai)** | TypeScript/Node SDK | You're building in Node, Deno, or Bun |
-| **[commune-mcp](https://github.com/shanjai-raj/commune-mcp)** | MCP server | You want Claude Desktop, Cursor, or Windsurf to have email |
-| **[commune-cookbook](https://github.com/shanjai-raj/commune-cookbook)** | Examples + notebooks | You want working code for LangChain, CrewAI, LangGraph, etc. |
-
-**Where to go next:**
-- Got the SDK installed and want a working agent? → [`commune-cookbook/00_START_HERE.md`](https://github.com/shanjai-raj/commune-cookbook/blob/main/00_START_HERE.md)
-- Want to run this in Claude Desktop or Cursor? → [`commune-mcp`](https://github.com/shanjai-raj/commune-mcp)
-- Something broken? → [`ERRORS.md`](ERRORS.md)
+| Package | Description |
+|---------|-------------|
+| [commune](https://github.com/shanjai-raj/commune) | Email & SMS infrastructure — self-hostable backend |
+| [commune-ai](https://github.com/shanjai-raj/commune-ai) | TypeScript/Node.js SDK |
+| **[commune-python](https://github.com/shanjai-raj/commune-python)** | **Python SDK** |
+| [commune-mcp](https://github.com/shanjai-raj/commune-mcp) | MCP server for Claude Desktop, Cursor, Windsurf |
+| [commune-cli](https://github.com/shanjai-raj/commune-cli) | Command-line interface |
 
 ---
 
@@ -989,4 +983,4 @@ This SDK is one part of a three-repo ecosystem:
 
 ## License
 
-MIT
+Apache-2.0
