@@ -49,7 +49,8 @@ client.messages.send(
 - **Hiring pipelines** — Outreach sequences to candidates, automated screening replies, interview scheduling, offer letters — all tracked per thread per candidate.
 - **Sales automation** — Personalized cold email from a CRM, follow-up sequences, lead qualification over email, handoff to human when warm.
 - **Investor updates** — Scheduled portfolio reports, deal flow notifications, LP communications — all with proper threading and read receipts.
-- **Multi-agent coordination** — Agents hand off tasks to each other via email. Agent A finishes a subtask, emails Agent B with the result. Agent B replies when done. Full audit trail in thread history.
+- **Multi-agent coordination** — Agents hand off tasks to each other via email. Agent A delegates to Agent B by sending to `researcher@org.commune.email`. Agent B processes and replies in the same thread. No shared database — the thread IS the task context. Full audit trail preserved permanently.
+- **Agent identity** — Every agent gets a permanent email address. `client.inboxes.create(local_part="my-agent")` returns `my-agent@org.commune.email` — a stable identity that survives process restarts, framework changes, and infrastructure migrations. See [agent-to-agent examples →](https://github.com/shanjai-raj/commune-cookbook/tree/main/agent-to-agent)
 
 ---
 
