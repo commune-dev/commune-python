@@ -658,26 +658,6 @@ class SearchResult(ContractModel):
     last_activity: Optional[str] = None
 
 
-# ── SMS ───────────────────────────────────────────────────────────────────────
-
-
-class SmsSendResult(ContractModel):
-    """Confirmation returned after client.sms.send() succeeds.
-
-    Attributes:
-        message_id: Internal Commune message ID.
-        message_sid: Carrier-level message SID for delivery tracking.
-        status: Delivery status — "queued", "sent", "delivered", or "failed".
-        credits_charged: Credits deducted for this send (1 credit per segment
-                         for US numbers; international rates vary).
-    """
-
-    message_id: Optional[str] = None
-    message_sid: Optional[str] = None
-    status: Optional[str] = None
-    credits_charged: Optional[int] = None
-
-
 # ── Delivery ──────────────────────────────────────────────────────────────────
 
 

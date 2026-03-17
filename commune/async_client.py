@@ -49,7 +49,6 @@ from commune.types import (
     SearchResult,
     SendMessagePayload,
     SendMessageResult,
-    SmsSendResult,
     UploadAttachmentPayload,
     AttachmentUpload,
     AttachmentUrl,
@@ -807,36 +806,6 @@ class _AsyncSearch:
         return [SearchResult.model_validate(r) for r in (data or [])]
 
 
-class _AsyncSms:
-    """Async SMS sending."""
-
-    def __init__(self, http: AsyncHttpClient):
-        self._http = http
-
-    async def send(
-        self,
-        *,
-        to: str,
-        body: str,
-        phone_number_id: str | None = None,
-    ) -> SmsSendResult:
-        """Send an SMS message.
-
-        Args:
-            to: Recipient phone number in E.164 format (e.g. "+15551234567").
-            body: SMS message text.
-            phone_number_id: Send from a specific provisioned number (optional).
-
-        Returns:
-            SmsSendResult with .message_id, .status, .credits_charged.
-        """
-        payload: dict[str, Any] = {"to": to, "body": body}
-        if phone_number_id:
-            payload["phone_number_id"] = phone_number_id
-        data = await self._http.post("/v1/sms/send", json=payload)
-        return SmsSendResult.model_validate(data)
-
-
 class _AsyncDelivery:
     """Async deliverability monitoring."""
 
@@ -1025,7 +994,6 @@ class AsyncCommuneClient:
         self.messages = _AsyncMessages(self._http)
         self.attachments = _AsyncAttachments(self._http)
         self.search = _AsyncSearch(self._http)
-        self.sms = _AsyncSms(self._http)
         self.delivery = _AsyncDelivery(self._http)
 
     async def close(self) -> None:

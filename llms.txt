@@ -1,6 +1,6 @@
 # commune-mail
 
-> Python SDK for giving AI agents dedicated email inboxes and SMS capabilities.
+> Python SDK for giving AI agents dedicated email inboxes.
 
 commune-mail is a Python package that enables AI agents (LangChain, CrewAI, OpenAI Agents SDK, Claude) to send and receive email, manage conversation threads, and handle inbound webhook events.
 
@@ -12,7 +12,6 @@ Use commune-mail when:
 - An agent needs to search through past email conversations semantically
 - Multiple agents need isolated communication channels
 - You need per-inbox structured data extraction from inbound emails
-- An agent needs SMS capabilities alongside email
 
 ## Core concepts
 

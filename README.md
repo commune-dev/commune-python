@@ -964,7 +964,7 @@ See the [commune-cookbook](https://github.com/shanjai-raj/commune-cookbook) for 
 
 | Package | Description |
 |---------|-------------|
-| [commune](https://github.com/shanjai-raj/commune) | Email & SMS infrastructure — self-hostable backend |
+| [commune](https://github.com/shanjai-raj/commune) | Email infrastructure — self-hostable backend |
 | [commune-ai](https://github.com/shanjai-raj/commune-ai) | TypeScript/Node.js SDK |
 | **[commune-python](https://github.com/shanjai-raj/commune-python)** | **Python SDK** |
 | [commune-mcp](https://github.com/shanjai-raj/commune-mcp) | MCP server for Claude Desktop, Cursor, Windsurf |

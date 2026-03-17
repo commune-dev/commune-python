@@ -1,5 +1,5 @@
 """
-Commune Python SDK — Email & SMS infrastructure for AI agents.
+Commune Python SDK — Email infrastructure for AI agents.
 
 This module provides CommuneClient, the main entry point for all Commune operations.
 Use this when you want your AI agent to:
@@ -51,7 +51,6 @@ from commune.types import (
     SearchResult,
     SendMessagePayload,
     SendMessageResult,
-    SmsSendResult,
     UploadAttachmentPayload,
     AttachmentUpload,
     AttachmentUrl,
@@ -1188,65 +1187,6 @@ class _Search:
         return [SearchResult.model_validate(r) for r in (data or [])]
 
 
-class _Sms:
-    """SMS sending — give your agent a text messaging channel alongside email.
-
-    Use client.sms.send() to send an SMS. Requires a provisioned phone number
-    in your Commune account. Credits are charged per segment (160 characters
-    for standard SMS; 153 for multi-part messages).
-
-    Example::
-
-        result = client.sms.send(
-            to="+15551234567",
-            body="Your verification code is 847291.",
-        )
-        print(result.status)  # → "queued"
-    """
-
-    def __init__(self, http: HttpClient):
-        self._http = http
-
-    def send(
-        self,
-        *,
-        to: str,
-        body: str,
-        phone_number_id: str | None = None,
-    ) -> SmsSendResult:
-        """Send an SMS message.
-
-        Args:
-            to: Recipient phone number in E.164 format (e.g. "+15551234567").
-                Must include country code. US numbers: "+1XXXXXXXXXX".
-            body: SMS message text. Keep under 160 characters for a single
-                  segment. Longer messages are split automatically but cost
-                  more credits.
-            phone_number_id: Send from a specific provisioned number. If your
-                             account has only one number, this is optional.
-
-        Returns:
-            SmsSendResult with:
-              .message_id      — internal Commune ID
-              .message_sid     — carrier-level SID for delivery tracking
-              .status          — "queued", "sent", "delivered", or "failed"
-              .credits_charged — credits deducted for this send
-
-        Example — SMS escalation from email agent:
-            # In email webhook handler — if marked urgent, also send SMS
-            if "urgent" in payload["subject"].lower():
-                client.sms.send(
-                    to=on_call_phone,
-                    body=f"Urgent email from {payload['sender']}: {payload['subject']}",
-                )
-        """
-        payload: dict[str, Any] = {"to": to, "body": body}
-        if phone_number_id:
-            payload["phone_number_id"] = phone_number_id
-        data = self._http.post("/v1/sms/send", json=payload)
-        return SmsSendResult.model_validate(data)
-
-
 class _Delivery:
     """Deliverability monitoring — track email delivery health and manage suppressions.
 
@@ -1396,7 +1336,6 @@ class CommuneClient:
     - Reply within a conversation:         client.messages.send(thread_id=...)
     - Browse conversation history:         client.threads.list(), client.threads.messages()
     - Search email content:                client.search.threads(query)
-    - Send an SMS:                         client.sms.send(to, body)
     - Monitor delivery health:             client.delivery.metrics(inbox_id)
     - Handle file attachments:             client.attachments.upload(), .get(), .url()
     - Manage sending domains:              client.domains.list(), .create(), .verify()
@@ -1495,7 +1434,6 @@ class CommuneClient:
         self.messages = _Messages(self._http)
         self.attachments = _Attachments(self._http)
         self.search = _Search(self._http)
-        self.sms = _Sms(self._http)
         self.delivery = _Delivery(self._http)
 
     def close(self) -> None:
